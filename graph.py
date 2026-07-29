@@ -58,7 +58,7 @@ def generate_query(state:ReseachState):
                     Query should not be of more than 10 words
                     
                     Topic:{state["topic"]}
-                    
+                    Already found context: {str(state["results"])[:500]}
                     """
         response = llm_fast.invoke(prompt)
         content = response.content
