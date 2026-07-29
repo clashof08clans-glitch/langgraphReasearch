@@ -4,7 +4,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 import os
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
-import json
+
+import psycopg2
 
 load_dotenv()
 
@@ -20,6 +21,29 @@ class ReseachState(TypedDict):
     sufficient: str
     answer : str
     itr: int
+
+
+def get_connection():
+     return psycopg2.connect(
+          dbname = "research_agent",
+          user = "postgres",
+          password = os.getenv("DB_PASSWORD"),
+          host = "localhost",
+          port = "5432"
+     )
+
+def setup_db():
+     conn = get_connection()
+     cursor = conn.cursor()
+     cursor.execute("""
+          CREATE TABLE IF NOT EXISTS cache(
+          topic TEXT PRIMARY KEY,
+          answer TEXT
+          )
+     """)
+     conn.commit()
+     conn.close()
+
 
 def extract_text(content):
     if isinstance(content, list):
@@ -86,29 +110,45 @@ def synthesize(state:ReseachState):
 
 def load_cache(topic):
      try:
-          with open('cache.json','r') as file:
-               data = json.load(file)
-          if topic in data:
-               return data.get(topic)
-          else:
-               return ""
-     except (FileNotFoundError, json.JSONDecodeError):
-        return ""
+         conn = get_connection()
+         cursor = conn.cursor()
+         cursor.execute("SELECT answer FROM cache WHERE topic = %s",(topic,))
+         result = cursor.fetchone()
+         conn.close()
+         return result[0] if result else ""
+     except Exception as e:
+          print(f"Cache load error: {e}")
+          return ""
+
      
 def save_cache(topic,answer):
      try:
-          with open('cache.json','r') as file:
-               data = json.load(file)
-     except(FileNotFoundError,json.JSONDecodeError):
-          data =  {}
-     
-     data[topic] = answer
+          conn = get_connection()
+          cursor = conn.cursor()
+          cursor.execute("""
+               INSERT INTO cache (topic,answer)
+               VALUES (%s,%s)
+               ON CONFLICT (topic) DO UPDATE SET answer = EXCLUDED.answer
+               """,(topic,answer)
+          )
+          conn.commit()
+          conn.close()
+     except Exception as e:
+        print(f"Cache save error: {e}")
 
-     with open("cache.json", "w") as file:
-        json.dump(data, file, indent=4)
+def get_all_topics():
+     try:
+          conn = get_connection()
+          cursor = conn.cursor()
+          cursor.execute("SELECT topic FROM cache ")
+          topics = [row[0] for row in cursor.fetchall()]
+          conn.close()
+          return topics
+     except Exception as e:
+          print(f"Error:{e}")
+          return []
 
-
-
+setup_db()
 
 graph = StateGraph(ReseachState)
 graph.add_node("generate_query",generate_query)

@@ -1,6 +1,7 @@
 import streamlit as st
-from graph import ReseachState , save_cache,load_cache,generate_query,app,graph,search,check_sufficiency,route,synthesize
-import json
+from graph import ReseachState , save_cache,load_cache,generate_query,app,graph,search,check_sufficiency,route,synthesize,get_connection,get_all_topics
+import psycopg2
+
 st.set_page_config(page_title="RESEARCH AGENT")
 st.title("Ask you query")
 
@@ -17,18 +18,13 @@ if st.button("Search 🔍"):
             st.write(result["answer"])
 
 
-try:
-    with open("cache.json","r") as file:
-        history = json.load(file)
-
-except:
-    history = {}
+history = get_all_topics()
 
 st.sidebar.title("Search History")
 if history:
     for past_topic in history:
         if st.sidebar.button(past_topic):
-            st.write(history[past_topic])
+            st.write(load_cache(past_topic))
 
 else:
     st.sidebar.write("No searches yet")
